@@ -1,10 +1,14 @@
 import { useState } from "react";
-import { View, Image, Alert } from "react-native";
-import { Link } from "expo-router";
 import { StatusBar } from "react-native";
+import { Link, Redirect } from "expo-router";
+import { View, Image, Alert } from "react-native";
+
+import axios from "axios";
+
+import { api } from "@/server/api";
+import { useBadgeStore } from "@/store/badge-store";
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-
 
 import { colors } from "@/styles/colors";
 
@@ -12,11 +16,30 @@ import { Input } from "@/components/input";
 import { Button } from "@/components/button";
 
 export default function Home () {
-    const [code, setCode] = useState<string>("");
+    const badgeStore = useBadgeStore();
 
-    function handleAccessCredential () {
-        if (!code.trim()) return Alert.alert("Ingresso", "Informe o código do ingresso!");
+    const [code, setCode] = useState<string>("");
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+
+    async function handleAccessCredential () {
+        try {
+            setIsLoading(true);
+            if (!code.trim()) return Alert.alert("Ingresso", "Informe o código do ingresso!");
+
+            const { data } = await api.get(`/attendees/${code}/badge`);
+
+            badgeStore.save( { ...data.badge, id: code });
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                if (error.response?.data) return Alert.alert("Ingresso", error.response?.data.message);
+            }
+            Alert.alert("Ingresso", "Ingresso não encontrado!");
+        } finally {
+            setIsLoading(false);
+        }
     }
+
+    if (badgeStore.data) return <Redirect href="/ticket" />;
 
     return (
         <View className="flex-1 bg-green-500 items-center justify-center p-8">
@@ -41,6 +64,7 @@ export default function Home () {
                 <Button
                     title="Acessar credencial"
                     onPress={handleAccessCredential}
+                    isLoading={isLoading}
                 />
                 <Link
                     href="/register"

@@ -1,28 +1,65 @@
 import { useState } from "react";
 
-import { View, Image, Alert } from "react-native";
-import { Link, router } from "expo-router";
 import { StatusBar } from "react-native";
+import { Link, router } from "expo-router";
+import { View, Image, Alert } from "react-native";
 
 import { FontAwesome6, MaterialIcons } from "@expo/vector-icons";
+import axios from "axios";
 
+import { useBadgeStore } from "@/store/badge-store";
 import { colors } from "@/styles/colors";
 
 import { Input } from "@/components/input";
 import { Button } from "@/components/button";
 
+import { api } from "@/server/api";
+
+const EVENT_ID = "c7c7a8f1-0237-4def-a92a-726ecb8dbae9";
+
 export default function Register () {
+    const badgeStore = useBadgeStore();
+
     const [name, setName] = useState<string>("");
     const [email, setEmail] = useState<string>("");
+    const [isLoading, setIsLoading] = useState<boolean>(false);
 
-    function handleRegister () {
-        const errors: string[] = [];
-        if (!name.trim()) errors.push("Campo \"Nome\" é obrigatório");
-        if (!email.trim()) errors.push("Campo \"E-mail\" é obrigatório");
+    async function handleRegister () {
+        try {
+            const errors: string[] = [];
+            if (!name.trim()) errors.push("Campo \"Nome\" é obrigatório");
+            if (name.trim().length < 4) errors.push("Campo \"Nome\" precisa ter pelo menos 4 caracteres");
+            if (!email.trim()) errors.push("Campo \"E-mail\" é obrigatório");
 
-        if (errors.length > 0) return Alert.alert("Inscrição", `Não foi possível realizar o cadastro devido aos seguintes erros:\n\n${errors.map((erro) => erro).join("\n")}`);
+            if (errors.length > 0) return Alert.alert("Inscrição", `Não foi possível realizar o cadastro devido aos seguintes erros:\n\n${errors.map((erro) => erro).join("\n")}`);
 
-        router.push("/ticket");
+            setIsLoading(true);
+
+            const registerResponse = await api.post(`/events/${EVENT_ID}/attendees`, {
+                name,
+                email,
+            });
+
+            if (registerResponse.data.attendeeId) {
+                const { data } = await api.get(`/attendees/${registerResponse.data.attendeeId}/badge`);
+
+                badgeStore.save({ ...data.badge, id: registerResponse.data.attendeeId });
+
+                Alert.alert("Inscrição", "Inscrição realizada com sucesso!", [
+                    {
+                        text: "OK",
+                        onPress: () => router.push("/ticket"),
+                    }
+                ]);
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                if (error.response?.data) return Alert.alert("Inscrição", error.response?.data.message);
+            } 
+            Alert.alert("Inscrição", "Não foi possível fazer a inscrição");
+        } finally {
+            setIsLoading(false);
+        }
     }
     
     return (
@@ -60,6 +97,7 @@ export default function Register () {
                 <Button
                     title="Realizar inscrição"
                     onPress={handleRegister}
+                    isLoading={isLoading}
                 />
                 <Link
                     href="/"
